@@ -125,6 +125,11 @@ Berkeley Systems, Sierra or their successors. "After Dark" and "Totally Twisted"
 trademarks of their owners. The download sites above are third-party archives. Make
 sure that you can legally use the software in your country.
 
+retwisted is licensed under the [MIT License](LICENSE). The license covers the
+retwisted code only. It gives no rights to the original After Dark software.
+`ripper/src/container/sitcodec.rs` contains code from the `stuffit` crate
+(MIT License, Copyright (c) 2025 Ben Letchford).
+
 The behavior of each module comes from a study of the original program. The colors
 use the Macintosh display gamma, so they look as they did on a 1995 Macintosh monitor.
 

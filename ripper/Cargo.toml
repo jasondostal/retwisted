@@ -2,6 +2,7 @@
 name = "ripper"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 publish = false
 description = "Rip a user's own Totally Twisted originals into retwisted asset packs (pure-Rust port of tools/rip.py)"
 
