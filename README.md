@@ -6,6 +6,10 @@ All 13 modules are here: Bungee Roulette, Chameleon, Coming Soon!, Flying Toilet
 FrankenScreen, Message Mayhem, Mike's So-called Life, Mime Hunt, Mowin' Boris,
 Phlegm Boy, Shock Clocks, Toxic Swamp and Voyeur.
 
+![Four retwisted modules (Bungee Roulette, Mowin' Boris, Flying Toilets and Phlegm Boy) around the recreated After Dark control panel](https://ducktyping.dev/retwisted-4up.png)
+
+*retwisted running from a user's own copy of the original. The image is not in this repository.*
+
 **This repository contains no Berkeley Systems art, sound or text.** You supply your
 own copy of the original software. retwisted reads it and makes the files that it
 needs on your computer. This is the same model that ScummVM uses.
