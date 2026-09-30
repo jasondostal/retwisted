@@ -1,0 +1,19 @@
+[package]
+name = "saver"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "retwisted_saver"
+# staticlib: what the macOS .saver bundle links (tools/build_saver.sh).
+# cdylib: a loadable .dylib, handy for dlopen-based experiments.
+# rlib: required for `cargo test` to link tests/abi.rs against this crate.
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+engine = { path = "../engine" }
+app = { path = "../app" }
+# The first-run ripper (lib `twistedrip`), linked into the staticlib so a
+# pack-less .saver can rip the user's own originals in-process.
+ripper = { path = "../ripper" }

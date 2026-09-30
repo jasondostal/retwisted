@@ -1,0 +1,13 @@
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+default-run = "app"
+
+[dependencies]
+engine = { path = "../engine" }
+winit = "0.30"
+softbuffer = "0.4"
+rodio = { version = "0.19", default-features = false, features = ["wav"] }
+png = "0.17"
+chrono = "0.4"

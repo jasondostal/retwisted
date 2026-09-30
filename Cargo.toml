@@ -1,0 +1,8 @@
+[workspace]
+members = ["engine", "app", "saver", "ripper"]
+resolver = "2"
+
+# The ripper's tests deflate thousands of PNGs to check byte parity; at
+# opt-level 0 that alone takes minutes.
+[profile.dev.package.ripper]
+opt-level = 3

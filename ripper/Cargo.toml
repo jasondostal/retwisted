@@ -1,0 +1,17 @@
+[package]
+name = "ripper"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Rip a user's own Totally Twisted originals into retwisted asset packs (pure-Rust port of tools/rip.py)"
+
+# No dependencies on purpose: this links into the macOS .saver staticlib
+# (arm64 + x86_64), so everything -- StuffIt, BinHex, HFS, resource forks,
+# the zlib-exact deflate the parity gate needs -- is plain std Rust.
+
+[lib]
+name = "twistedrip"
+
+[[bin]]
+name = "twistedrip"
+path = "src/bin/twistedrip.rs"
