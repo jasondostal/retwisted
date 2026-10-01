@@ -299,6 +299,15 @@ public final class RetwistedSaverView: ScreenSaverView {
     /// (log, 2026-09-12 21:49), so window level cannot tell them apart; the
     /// session broadcasts can — only a real run gets one.
     private static var sessionActive = false
+    /// When this session's first willstart/didstart arrived, and when the
+    /// host last called startAnimation() on THIS view. The sheet thumbnail
+    /// shares the real run's window level and gets the same broadcasts, so
+    /// with Settings open both passed the old gate and both played (Jason,
+    /// 2026-09-30: Boris full screen, toilets from the thumbnail). The real
+    /// run is the view the host STARTS for the session; the thumbnail has
+    /// been animating since long before it.
+    private static var sessionStartedAt: CFTimeInterval = 0
+    private var startedAt: CFTimeInterval = 0
     private var observers: [NSObjectProtocol] = []
     /// Same, for the in-process centre (settingsChanged).
     private var localObservers: [NSObjectProtocol] = []
@@ -414,6 +423,7 @@ public final class RetwistedSaverView: ScreenSaverView {
                 // real one (log, 2026-09-12 21:52). Only the host's own
                 // startAnimation() call on a view may wake it.
                 Self.log.notice("retwisted: \(name, privacy: .public) -> session active")
+                if !Self.sessionActive { Self.sessionStartedAt = CACurrentMediaTime() }
                 Self.sessionActive = true
                 _ = self
             })
@@ -904,6 +914,7 @@ public final class RetwistedSaverView: ScreenSaverView {
 
     override public func startAnimation() {
         dormant = false
+        startedAt = CACurrentMediaTime()
         // Build (or rebuild, after a dormant release) BEFORE the timer
         // starts: super reads `animationTimeInterval`, which comes from the
         // module. A new session (or a restarted preview) on a view that has
@@ -960,7 +971,10 @@ public final class RetwistedSaverView: ScreenSaverView {
         guard let w = window else { return true }  // headless tools
         // Both conditions: the sheet thumbnail is shielding-level with no
         // session; the pane view is level 0 inside a session.
+        // Started for THIS session: the host's startAnimation() may come
+        // just before the willstart broadcast, hence the slack.
         return Self.sessionActive && w.level != .normal
+            && startedAt >= Self.sessionStartedAt - 5
     }
 
     private func silence() {

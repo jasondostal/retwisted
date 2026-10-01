@@ -71,6 +71,7 @@ This file is everything else, plus the short "what's owed right now" view.
 - [x] Saver music (PCM ABI entry point): `rtw_music_*`, one AVAudioEngine source node per process, same gate as the sfx (2026-09-29).
 - [x] Random / rotate-modules mode ("Randomizer" in the OG list): first row of the panel list, Default Duration = AD 3.0 sVal/sUnt/rsVl 503 (2026-09-29). Named Randomizer settings / In Order / Multi-Module not reproduced.
 - [x] (2026-09-29, headless-verified) Pack-less first run: Rust ripper linked into the staticlib (`rtw_rip_*`, polled worker, atomic per-pack install), `PackStore` (container Application Support → bundled Resources, per module), Locate… in the panel, empty-state saver note, `build_saver.sh --no-packs`. docs/saver.md "First run".
+- [ ] AUDIO: Settings open + real saver starts → the sheet thumbnail played too (Jason 2026-09-30: Boris full screen, toilets from the preview). Gated on startAnimation within 5 s of the session's first willstart/didstart; installed, owed Jason's test (open Settings w/ thumbnail, let the saver kick in or hot-corner it).
 - [ ] REAL HOST: NSOpenPanel from the Options sheet inside legacyScreenSaver (powerbox sheet appears, URL returns, ~/Downloads readable), packs land in the container path, list lights up, thumbnail starts. Checklist in the 2026-09-29 lane report / docs/saver.md "Sandbox". Fallbacks if not: /Users/Shared/Retwisted drop folder, CLI into the container.
 
 ## Engine

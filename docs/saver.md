@@ -998,8 +998,11 @@ Note: zsh has a `log` builtin — always call `/usr/bin/log show`.
   and produced a second run over the real one.
 
 Resulting policy in `RetwistedSaverView`: one static audio channel per
-process; a view plays only when `sessionActive && window.level != .normal`
-and it is on a visible window; full-screen views go dormant on the stop /
+process; a view plays only when `sessionActive && window.level != .normal`,
+its `startAnimation()` came no earlier than 5 s before the session's first
+start broadcast (the sheet thumbnail shares the real run's level and
+broadcasts, and played over it with Settings open — 2026-09-30), and it is
+on a visible window; full-screen views go dormant on the stop /
 unlock broadcasts and when System Settings quits, and only the host's
 `startAnimation()` wakes them; dormant or off-screen views neither tick nor
 draw.
