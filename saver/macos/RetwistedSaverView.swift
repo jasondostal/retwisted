@@ -323,6 +323,12 @@ public final class RetwistedSaverView: ScreenSaverView {
     /// run is the view the host STARTS for the session; the thumbnail has
     /// been animating since long before it.
     private static var sessionStartedAt: CFTimeInterval = 0
+    /// The view the host started most recently. The real run is started
+    /// ~0.13 s AFTER didstart (log 2026-09-30, two sessions); a thumbnail
+    /// can be started as little as 1.2 s BEFORE it (19:42:35.3 vs :36.5),
+    /// inside any sane slack — so of the views that pass the time gate,
+    /// only the newest may sound.
+    private static weak var newestStarted: RetwistedSaverView?
     private var startedAt: CFTimeInterval = 0
     private var observers: [NSObjectProtocol] = []
     /// Same, for the in-process centre (settingsChanged).
@@ -931,6 +937,7 @@ public final class RetwistedSaverView: ScreenSaverView {
     override public func startAnimation() {
         dormant = false
         startedAt = CACurrentMediaTime()
+        Self.newestStarted = self
         // Build (or rebuild, after a dormant release) BEFORE the timer
         // starts: super reads `animationTimeInterval`, which comes from the
         // module. A new session (or a restarted preview) on a view that has
@@ -991,6 +998,7 @@ public final class RetwistedSaverView: ScreenSaverView {
         // just before the willstart broadcast, hence the slack.
         return Self.sessionActive && w.level != .normal
             && startedAt >= Self.sessionStartedAt - 5
+            && (Self.newestStarted === self || Self.newestStarted == nil)
     }
 
     private func silence() {
