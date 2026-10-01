@@ -402,16 +402,16 @@ pub const FLB_STATES: &[(u16, u32, bool)] = &[
 ];
 
 // fn95 transition pools (A5 data; lengths from the fn96 push sites).
-pub const L_IDLE: &[u16] = &[1, 1, 1, 3]; // g003E, 4, avoid 1
+pub const L_IDLE: &[u16] = &[1, 1, 1, 3]; // g003E, 4, first roll stands
 pub const L10: &[u16] = &[22, 25, 28, 32, 36, 39]; // g0046, 6
-pub const L_WALK: &[u16] = &[12, 12, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 46, 50, 50]; // g0052, 15, avoid 12
+pub const L_WALK: &[u16] = &[12, 12, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 46, 50, 50]; // g0052, 15, repeat only from 12
 pub const L22: &[u16] = &[22, 22, 22, 24, 25, 25, 28, 51]; // g0070, 8
 pub const L25: &[u16] = &[22, 25, 25, 25, 27, 32, 32, 54]; // g0080, 8
 pub const L28: &[u16] = &[22, 22, 28, 28, 28, 30, 31, 36, 51]; // g0090, 9
 pub const L32: &[u16] = &[25, 32, 32, 32, 34, 35, 39, 39, 54]; // g00A2, 9
 pub const L36: &[u16] = &[36, 36, 36, 38, 39, 28, 28, 51]; // g00B4, 8
 pub const L39: &[u16] = &[28, 32, 36, 36, 39, 39]; // g00C4, 6
-pub const L44: &[u16] = &[2, 2, 44, 45, 45, 48]; // g00D0, 6, avoid 45
+pub const L44: &[u16] = &[2, 2, 44, 45, 45, 48]; // g00D0, 6, repeat only from 45
 pub const L49: &[u16] = &[23, 26, 29, 33, 37, 40, 43, 43, 49, 49, 49, 49, 52, 52, 55, 55]; // g00DC, 16
 pub const L51: &[u16] = &[22, 28, 36, 51, 51, 51, 51, 53]; // g00FC, 8
 pub const L54: &[u16] = &[25, 32, 39, 54, 54, 54, 54, 56]; // g010C, 8
@@ -869,11 +869,17 @@ impl MowinBoris {
         self.cats.truncate(target);
     }
 
-    /// fn95 @079A: pick from a pool avoiding one value (avoid active when != 0).
-    fn fn95(&self, pool: &[u16], avoid: u16, ctx: &mut Ctx) -> u16 {
+    /// fn95 @079A `(obj, first_ok, n, pool, cur)`: `pool[Random15 % n]`;
+    /// with `first_ok` the first roll stands, otherwise re-roll while the
+    /// pick == `cur` (the state being left). Callers pass `first_ok = 1`
+    /// except L_WALK (`cur == 12`), L44 (`cur == 45`) and L10 (0, no 10 in
+    /// the pool). The port used to read the flag as "the value to avoid":
+    /// L_IDLE [1,1,1,3] then ALWAYS left idle for 3, and walk states 13..21
+    /// could repeat themselves while 12 could not — both inverted.
+    fn fn95(&self, pool: &[u16], first_ok: bool, cur: u16, ctx: &mut Ctx) -> u16 {
         loop {
-            let pick = pool[ctx.rng.pct(pool.len() as u32) as usize];
-            if avoid == 0 || pick != avoid {
+            let pick = pool[(ctx.rng15.next() as usize) % pool.len()];
+            if first_ok || pick != cur {
                 return pick;
             }
         }
@@ -1208,7 +1214,7 @@ impl MowinBoris {
                 if ctx.now_ms < self.cats[ix].enter_ms + 2500 {
                     1
                 } else {
-                    self.fn95(L_IDLE, 1, ctx)
+                    self.fn95(L_IDLE, true, 1, ctx)
                 }
             }
             2 => 1,
@@ -1231,7 +1237,7 @@ impl MowinBoris {
             9 => 8,
             10 => {
                 if !self.cats[ix].busy {
-                    self.fn95(L10, 0, ctx)
+                    self.fn95(L10, false, 10, ctx)
                 } else {
                     // A cat `fn10` picked for the drag: by the sign of the
                     // mower's effective step (+0x12A, times -2 while +0x12E
@@ -1247,7 +1253,7 @@ impl MowinBoris {
             11 => 12,
             12..=21 => {
                 if !self.cats[ix].far_off && !self.mower_busy() {
-                    self.fn95(L_WALK, if s == 12 { 12 } else { 0 }, ctx)
+                    self.fn95(L_WALK, s == 12, s, ctx)
                 } else {
                     self.fn98(&self.cats[ix])
                 }
@@ -1255,14 +1261,14 @@ impl MowinBoris {
             22..=41 => self.walk_family(ix, ctx, s),
             42 => 11,
             43 => 42,
-            44 | 45 | 48 => self.fn95(L44, if s == 45 { 45 } else { 0 }, ctx),
+            44 | 45 | 48 => self.fn95(L44, s == 45, s, ctx),
             46 => 45,
             47 => 0x32,
             49 => {
                 if !self.cats[ix].far_off && !self.mower_busy() {
                     let h = self.fn92(&self.cats[ix], ctx);
                     if h == 10 {
-                        self.fn95(L49, 1, ctx)
+                        self.fn95(L49, true, 0, ctx)
                     } else if ctx.rng.pct(7) == 3 {
                         0x2b
                     } else {
@@ -1278,7 +1284,7 @@ impl MowinBoris {
                     if self.cats[ix].enter_ms + 5000 <= ctx.now_ms {
                         0x35
                     } else {
-                        self.fn95(L51, 1, ctx)
+                        self.fn95(L51, true, 0, ctx)
                     }
                 } else {
                     self.fn98(&self.cats[ix])
@@ -1291,7 +1297,7 @@ impl MowinBoris {
                     if self.cats[ix].enter_ms + 5000 <= ctx.now_ms {
                         0x38
                     } else {
-                        self.fn95(L54, 1, ctx)
+                        self.fn95(L54, true, 0, ctx)
                     }
                 } else {
                     self.fn98(&self.cats[ix])
@@ -1317,32 +1323,32 @@ impl MowinBoris {
         match s {
             22 => match h {
                 22 | 25 | 28 => h,
-                10 => self.fn95(L22, 1, ctx),
+                10 => self.fn95(L22, true, 0, ctx),
                 _ => 24,
             },
             25 => match h {
                 22 | 25 | 32 => h,
-                10 => self.fn95(L25, 1, ctx),
+                10 => self.fn95(L25, true, 0, ctx),
                 _ => 27,
             },
             28 => match h {
                 22 | 28 | 36 => h,
-                10 => self.fn95(L28, 1, ctx),
+                10 => self.fn95(L28, true, 0, ctx),
                 _ => 31,
             },
             32 => match h {
                 25 | 32 | 39 => h,
-                10 => self.fn95(L32, 1, ctx),
+                10 => self.fn95(L32, true, 0, ctx),
                 _ => 34,
             },
             36 => match h {
                 28 | 36 | 39 => h,
-                10 => self.fn95(L36, 1, ctx),
+                10 => self.fn95(L36, true, 0, ctx),
                 _ => 38,
             },
             39 => match h {
                 32 | 36 | 39 => h,
-                10 => self.fn95(L39, 1, ctx),
+                10 => self.fn95(L39, true, 0, ctx),
                 _ => 41,
             },
             23 => 22,
