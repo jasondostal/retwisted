@@ -2302,6 +2302,54 @@ mod tests {
         }
     }
 
+    /// Diagnostic (ignored): open-window episode stats at 4 fps over 450 s,
+    /// same measure as the voyeur-long-1 golden (median 0.5 s, p90 2.75 s,
+    /// 30 episodes ≥ 10 s, 52 % of cell-time lit; 4×3 grid).
+    #[test]
+    #[ignore]
+    fn open_window_episodes() {
+        for seed in [1u64, 3, 5] {
+            let Some(mut m) = load() else { return };
+            let mut c = ctx_seeded(seed);
+            let mut pace = Pacer::new(&m);
+            let mut seq: Vec<Vec<bool>> = Vec::new();
+            let mut next = 0u64;
+            while c.now_ms < 450_000 {
+                pace.advance(&mut c);
+                m.tick(&mut c);
+                c.sounds.clear();
+                if c.now_ms >= next {
+                    next += 250;
+                    let mut v = Vec::new();
+                    for r in 0..m.rows as i32 {
+                        for col in 0..m.cols as i32 {
+                            v.push(m.cell(col, r) > 0);
+                        }
+                    }
+                    seq.push(v);
+                }
+            }
+            let cells = seq[0].len();
+            let mut segs: Vec<f64> = Vec::new();
+            let mut lit = 0usize;
+            for k in 0..cells {
+                let (mut cur, mut n, mut first) = (seq[0][k], 0usize, true);
+                for row in &seq {
+                    lit += row[k] as usize;
+                    if row[k] == cur { n += 1 } else {
+                        if !first && cur { segs.push(n as f64 / 4.0) }
+                        first = false; cur = row[k]; n = 1;
+                    }
+                }
+            }
+            segs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let q = |p: f64| segs[((segs.len() as f64) * p) as usize];
+            println!("seed {seed} grid {}x{}: open episodes {} median {} p75 {} p90 {} max {} >=10s {} lit {:.2}",
+                m.cols, m.rows, segs.len(), q(0.5), q(0.75), q(0.9), segs.last().unwrap(),
+                segs.iter().filter(|&&s| s >= 10.0).count(), lit as f64 / (cells * seq.len()) as f64);
+        }
+    }
+
     #[test]
     fn voyeur_smoke() {
         let Some(mut m) = load() else {
