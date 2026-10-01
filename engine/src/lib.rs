@@ -52,8 +52,10 @@ pub struct RandomLong {
 }
 
 impl RandomLong {
+    /// xorshift only needs a nonzero state: every nonzero seed is its own
+    /// stream (odd seeds unchanged from the old `seed | 1`), 0 gets a constant.
     pub fn new(seed: u64) -> Self {
-        Self { s: seed | 1 }
+        Self { s: if seed == 0 { 0x9E37_79B9_7F4A_7C15 } else { seed } }
     }
     pub fn next(&mut self) -> u32 {
         self.s ^= self.s << 13;

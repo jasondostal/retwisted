@@ -3925,6 +3925,7 @@ mod tests {
         // the left edge steps 30 px while the body does not move at all).
         let mut prev: Vec<(i32, i32, u32, bool)> = Vec::new();
         let mut worst = 0i32;
+        let mut worst_in_run = 0i32;
         let mut worst_at = (0u64, 0i32, 0i32);
         let mut hand_offs = 0usize;
         let mut spans: Vec<i32> = Vec::new();
@@ -3943,13 +3944,18 @@ mod tests {
                     if a.2 != b.2 || a.3 || b.3 {
                         continue; // kill / respawn re-seats the sprite
                     }
+                    let d = (a.0 - b.0).abs().max((a.1 - b.1).abs());
                     if k < before.len() && before[k] != m.mimes[k].first {
                         hand_offs += 1;
-                    }
-                    let d = (a.0 - b.0).abs().max((a.1 - b.1).abs());
-                    if d > worst {
-                        worst = d;
-                        worst_at = (c.now_ms, m.mimes[k].first, m.mimes[k].frame);
+                        if d > worst {
+                            worst = d;
+                            worst_at = (c.now_ms, m.mimes[k].first, m.mimes[k].frame);
+                        }
+                    } else {
+                        // In-run steps are the art's own box-centre motion
+                        // (the 0x323 lunge moves the centre 20.5 px 805->806
+                        // with dx/dy 0); bounded loosely, not by the capture.
+                        worst_in_run = worst_in_run.max(d);
                     }
                     if k == 0 {
                         if anchor.is_empty() {
@@ -3966,16 +3972,18 @@ mod tests {
             - spans.iter().copied().min().unwrap_or(0);
         assert!(hand_offs > 200, "only {hand_offs} run hand-offs in 60k ticks");
         assert!(
-            worst <= 20,
-            "a live mime jumped {worst} px in one frame at t={} run 0x{:X} frame {} \
+            worst <= 16,
+            "a live mime jumped {worst} px at a hand-off at t={} run 0x{:X} frame {} \
              (the capture's largest step is 16 px)",
             worst_at.0,
             worst_at.1,
             worst_at.2
         );
+        assert!(worst_in_run <= 26, "in-run step {worst_in_run} px exceeds the art's own motion");
         assert!(span >= 100, "mime 0 never travelled: {span} px of ground covered");
         println!(
-            "hand-offs {hand_offs}, worst live step {worst} px (t={} run 0x{:X} frame {}), \
+            "hand-offs {hand_offs}, worst hand-off step {worst} px (t={} run 0x{:X} frame {}), \
+             worst in-run {worst_in_run} px, \
              mime 0 covered {span} px",
             worst_at.0, worst_at.1, worst_at.2
         );
