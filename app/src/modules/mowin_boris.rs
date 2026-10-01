@@ -113,9 +113,12 @@
 //! - `fn100` @1B76 revive: +0x12C=1, +0x12E=0, +0x130=0, +0x11E=1, +0x12A=0,
 //!   +0x128=1 — in place, no move.
 //! - Sounds (`fn47` @5DD4 CueSound, 16-slot queue): the cat cues ONLY on
-//!   enter 0x8001 (bank slot 0 = Meow) and enter 0x8014 (slot 1 = Purr),
-//!   both gated by g0B32 == 0 (listing 0x14C-0x158 and 0x230-0x23C). The
-//!   lane-1 "2 % purr per tick" was invented — gone.
+//!   enter 0x8001 (bank slot 1 = PURR) and enter 0x8014 (slot 0 = MEOW) —
+//!   swapped until 2026-09-30 — both gated by g0B32 == 0 (listing
+//!   0x14C-0x158 and 0x230-0x23C), on EVERY SetState including a repeat.
+//!   An idling cat re-picks 1 (fn95, first roll stands, 3/4) and purrs per
+//!   run: the golden's one ~3.5 s continuous purr. The lane-1 "2 % purr per
+//!   tick" was invented — gone.
 //!
 //! ## Library sprite semantics
 //!
@@ -686,6 +689,11 @@ pub struct MowinBoris {
     pub clock: u64,
     pub next_due: u64,
     pub pending_sounds: Vec<u32>,
+    /// fn47/fn48's 16-slot CueSound queue for the cat cues: one starts when
+    /// the previous one's length (+0x24) has run out. An idling cat
+    /// re-enters 1 every ~2 frames and the queued Purrs play back to back.
+    pub cue_q: std::collections::VecDeque<u32>,
+    pub cue_busy_until: u64,
     pub cats: Vec<Cat>,
     pub mower: Mower,
     pub flutterby: Option<Flutterby>,
@@ -736,6 +744,8 @@ fn build(pack: Pack) -> Option<MowinBoris> {
         clock: 0,
         next_due: 0,
         pending_sounds: Vec::new(),
+        cue_q: std::collections::VecDeque::new(),
+        cue_busy_until: 0,
         cats: Vec::new(),
         mower: Mower {
             // fn06 @35F8: state 10, +0x122 = +0x120 = +0x11E = 1, +0x134 =
@@ -1081,6 +1091,12 @@ impl MowinBoris {
                     cat.off = true;
                 }
             }
+        }
+        // fn90's ENTER branch runs on EVERY SetState, a repeat included
+        // (the +0x49 repeat count @0x2C4 is bumped on that same path), so
+        // an idle cat re-picking 1 re-cues Purr each time.
+        if let Some(id) = self.enter_cue(state) {
+            self.pending_sounds.push(id);
         }
         let mut cat = std::mem::replace(&mut self.cats[ix], Cat::EMPTY);
         self.cat_start_sequence(&mut cat, ctx);
@@ -2117,14 +2133,17 @@ impl Cat {
 
 impl MowinBoris {
     fn enter_cue(&self, state: u16) -> Option<u32> {
-        // fn90: enter 0x8001 -> bank slot 0 (Meow); enter 0x8014 -> slot 1
-        // (Purr); both gated by g0B32 == 0 (the sound checkbox).
+        // fn90 @0x14C / @0x230: CueSound's LAST push is the bank slot
+        // (slot N = snd 1001+N, as the chop sites' explicit pushes show:
+        // 2 = Cat Chop, 3 = Head Chop, 4 = Buzz). Enter 0x8001 pushes 1 =
+        // PURR, enter 0x8014 pushes 0 = MEOW — the port had them swapped.
+        // Both gated by g0B32 == 0 (the sound checkbox).
         if self.mower_sound {
             return None;
         }
         match state {
-            1 => Some(SND_MEOW),
-            20 => Some(SND_PURR),
+            1 => Some(SND_PURR),
+            20 => Some(SND_MEOW),
             _ => None,
         }
     }
@@ -2241,14 +2260,8 @@ impl Module for MowinBoris {
 
         // 4. Cats advance
         for i in 0..self.cats.len() {
-            // Enter cues fire from the SetState path (fn90 enter branch)
-            let pre_state = self.cats[i].state;
+            // Enter cues fire from cat_set_state (fn90 enter branch).
             self.cat_update(i, ctx);
-            if self.cats[i].state != pre_state {
-                if let Some(id) = self.enter_cue(self.cats[i].state) {
-                    self.pending_sounds.push(id);
-                }
-            }
         }
 
         // 5. fn22's ten more planter calls after the draw (listing 215154).
@@ -2256,8 +2269,25 @@ impl Module for MowinBoris {
             self.fn63(ctx);
         }
 
+        // fn48 @5EBE plays the chop slots (2/3) ahead of anything queued;
+        // the cat cues wait their turn. GAP: a chop here still pre-empts a
+        // purr mid-sample (the 1995 pump would let it finish).
+        let now = ctx.now_ms;
         for id in self.pending_sounds.drain(..) {
-            ctx.sounds.push(id);
+            if id == SND_PURR || id == SND_MEOW {
+                if self.cue_q.len() < 16 {
+                    self.cue_q.push_back(id);
+                }
+            } else {
+                ctx.sounds.push(id);
+                self.cue_busy_until = now + self.pack.sound_ms(id);
+            }
+        }
+        if now >= self.cue_busy_until {
+            if let Some(id) = self.cue_q.pop_front() {
+                ctx.sounds.push(id);
+                self.cue_busy_until = now + self.pack.sound_ms(id);
+            }
         }
 
     }
@@ -2550,26 +2580,27 @@ mod tests {
         assert_eq!(m.enter_cue(1), None);
         assert_eq!(m.enter_cue(20), None);
         m.set_control(3, 0); // unmuted
-        assert_eq!(m.enter_cue(1), Some(SND_MEOW));
-        assert_eq!(m.enter_cue(20), Some(SND_PURR));
+        assert_eq!(m.enter_cue(1), Some(SND_PURR));
+        assert_eq!(m.enter_cue(20), Some(SND_MEOW));
         assert_eq!(m.enter_cue(10), None);
         assert_eq!(m.enter_cue(36), None);
-        // ...and the tick path: cues fire only when a cat's state CHANGES.
+        // ...and the tick path: the enter branch runs on every SetState, a
+        // REPEAT included — an idle cat re-picking 1 purrs again. (The old
+        // port cued only on a state change; the golden's ~3.5 s continuous
+        // purr is an idling cat re-entering 1 every run.)
         let mut pace = Pacer::new(&m);
-        let mut cues_on_change_only = true;
-        let mut prev = m.cats[0].state;
-        for _ in 0..2000 {
+        let mut repeat_purrs = 0usize;
+        for _ in 0..20_000 {
             pace.advance(&mut ctx);
+            let before: Vec<u16> = m.cats.iter().map(|c| c.repeat).collect();
             m.tick(&mut ctx);
-            let st = m.cats[0].state;
-            let cued = ctx.sounds.iter().any(|s| *s == SND_MEOW || *s == SND_PURR);
-            if cued && st == prev {
-                cues_on_change_only = false;
+            let repeated = m.cats.iter().zip(&before).any(|(c, &r)| c.state == 1 && c.repeat > r);
+            if repeated && ctx.sounds.contains(&SND_PURR) {
+                repeat_purrs += 1;
             }
-            prev = st;
             ctx.sounds.clear();
         }
-        assert!(cues_on_change_only, "cue fired without a state change");
+        assert!(repeat_purrs > 0, "an idle cat re-entering 1 never re-cued Purr");
     }
 
     #[test]
