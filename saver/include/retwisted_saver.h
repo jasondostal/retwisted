@@ -141,6 +141,10 @@ void rtw_field(const RtwRuntime *rt, uint8_t *rgb);
 // empty. Valid until the next rtw_next_sound call.
 const char *rtw_next_sound(RtwRuntime *rt);
 
+// Whether the sound the last rtw_next_sound returned QUEUES behind the one
+// playing (back to back, gapless) instead of pre-empting it.
+bool rtw_sound_queued(const RtwRuntime *rt);
+
 // The currently active looping sound as an absolute .wav path, or NULL when
 // no loop is sounding. Valid until the next rtw_loop_sound call.
 const char *rtw_loop_sound(RtwRuntime *rt);

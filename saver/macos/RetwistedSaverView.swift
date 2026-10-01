@@ -257,6 +257,22 @@ public final class RetwistedSaverView: ScreenSaverView {
     /// stacked into a sound salad (two independent bungee runs screaming over
     /// each other, 2026-09-12). Static = the original's single SndChannel.
     private static var player: AVAudioPlayer?
+    /// Players queued behind `player` (rtw_sound_queued), started with
+    /// play(atTime:) on the device clock so they run back to back with no
+    /// gap — the 1995 SndChannel's own command queue. `player` is always the
+    /// last one in the chain; `tailEnd` is device time when the chain ends.
+    private static var chain: [AVAudioPlayer] = []
+    private static var tailEnd: TimeInterval = 0
+    private static var channelBusy: Bool {
+        chain.removeAll { !$0.isPlaying }
+        return !chain.isEmpty
+    }
+    private static func stopChain() {
+        for p in chain { p.stop() }
+        chain.removeAll()
+        player?.stop()
+        player = nil
+    }
     private static var loopPlayer: AVAudioPlayer?
     private static var currentLoopPath: String?
     /// Which instance currently owns the channel; a view that is not on a
@@ -979,8 +995,7 @@ public final class RetwistedSaverView: ScreenSaverView {
 
     private func silence() {
         if Self.channelOwner === self || Self.channelOwner == nil {
-            Self.player?.stop()
-            Self.player = nil
+            Self.stopChain()
             Self.loopPlayer?.stop()
             Self.loopPlayer = nil
             Self.currentLoopPath = nil
@@ -1226,23 +1241,32 @@ public final class RetwistedSaverView: ScreenSaverView {
     /// screams is a bug report, not a feature.
     private func drainSounds() {
         guard let rt else { return }
-        var latest: String?
+        var fired: [(String, Bool)] = []
         while let c = rtw_next_sound(rt) {
-            latest = String(cString: c)
+            fired.append((String(cString: c), rtw_sound_queued(rt)))
         }
         guard !isPreview, isOnScreen, isRealRun else {
             silence()
             return
         }
         startMusicIfNeeded(rt)
-        if let path = latest {
-            Self.log.notice("retwisted: snd \((path as NSString).lastPathComponent, privacy: .public) level=\(self.window?.level.rawValue ?? -1)")
-            Self.player?.stop()
-            Self.loopPlayer?.pause()
+        for (path, queued) in fired {
+            Self.log.notice("retwisted: snd \((path as NSString).lastPathComponent, privacy: .public) queued=\(queued) level=\(self.window?.level.rawValue ?? -1)")
             do {
                 let p = try AVAudioPlayer(contentsOf: URL(fileURLWithPath: path))
                 p.volume = 0.4  // the shell's default volume
-                p.play()
+                p.prepareToPlay()
+                if queued && Self.channelBusy && Self.tailEnd > p.deviceCurrentTime {
+                    p.play(atTime: Self.tailEnd)
+                    Self.tailEnd += p.duration
+                } else {
+                    // stop-on-new: a pre-empting cue flushes the queue too
+                    Self.stopChain()
+                    p.play()
+                    Self.tailEnd = p.deviceCurrentTime + p.duration
+                }
+                Self.loopPlayer?.pause()
+                Self.chain.append(p)
                 Self.player = p
                 Self.channelOwner = self
             } catch {
@@ -1266,7 +1290,7 @@ public final class RetwistedSaverView: ScreenSaverView {
                     Self.log.error("retwisted: loop sound \(loopPath, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 }
             }
-            if Self.player?.isPlaying != true && Self.loopPlayer?.isPlaying != true {
+            if !Self.channelBusy && Self.loopPlayer?.isPlaying != true {
                 Self.loopPlayer?.play()
                 Self.channelOwner = self
             }

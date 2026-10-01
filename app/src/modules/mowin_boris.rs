@@ -689,11 +689,12 @@ pub struct MowinBoris {
     pub clock: u64,
     pub next_due: u64,
     pub pending_sounds: Vec<u32>,
-    /// fn47/fn48's 16-slot CueSound queue for the cat cues: one starts when
-    /// the previous one's length (+0x24) has run out. An idling cat
-    /// re-enters 1 every ~2 frames and the queued Purrs play back to back.
-    pub cue_q: std::collections::VecDeque<u32>,
-    pub cue_busy_until: u64,
+    /// fn47/fn48's 16-slot CueSound table for the cat cues: each entry's
+    /// END time (+0x24); a slot frees when its sound has played. The cues
+    /// themselves go to the shell queued (`Ctx::queue_sound`), so an idling
+    /// cat's Purrs — one per re-entered run, every ~2 frames — play back to
+    /// back, gapless, like the golden's ~3.5 s purr.
+    pub cue_slots: std::collections::VecDeque<u64>,
     pub cats: Vec<Cat>,
     pub mower: Mower,
     pub flutterby: Option<Flutterby>,
@@ -744,8 +745,7 @@ fn build(pack: Pack) -> Option<MowinBoris> {
         clock: 0,
         next_due: 0,
         pending_sounds: Vec::new(),
-        cue_q: std::collections::VecDeque::new(),
-        cue_busy_until: 0,
+        cue_slots: std::collections::VecDeque::new(),
         cats: Vec::new(),
         mower: Mower {
             // fn06 @35F8: state 10, +0x122 = +0x120 = +0x11E = 1, +0x134 =
@@ -2270,23 +2270,22 @@ impl Module for MowinBoris {
         }
 
         // fn48 @5EBE plays the chop slots (2/3) ahead of anything queued;
-        // the cat cues wait their turn. GAP: a chop here still pre-empts a
-        // purr mid-sample (the 1995 pump would let it finish).
+        // the cat cues wait their turn. GAP: a chop pre-empts (and flushes)
+        // queued purrs; the 1995 pump would play them after it.
         let now = ctx.now_ms;
+        while self.cue_slots.front().is_some_and(|&end| end <= now) {
+            self.cue_slots.pop_front();
+        }
         for id in self.pending_sounds.drain(..) {
             if id == SND_PURR || id == SND_MEOW {
-                if self.cue_q.len() < 16 {
-                    self.cue_q.push_back(id);
+                if self.cue_slots.len() < 16 {
+                    let start = self.cue_slots.back().copied().unwrap_or(now).max(now);
+                    self.cue_slots.push_back(start + self.pack.sound_ms(id));
+                    ctx.queue_sound(id);
                 }
             } else {
+                self.cue_slots.clear();
                 ctx.sounds.push(id);
-                self.cue_busy_until = now + self.pack.sound_ms(id);
-            }
-        }
-        if now >= self.cue_busy_until {
-            if let Some(id) = self.cue_q.pop_front() {
-                ctx.sounds.push(id);
-                self.cue_busy_until = now + self.pack.sound_ms(id);
             }
         }
 
@@ -2595,7 +2594,7 @@ mod tests {
             let before: Vec<u16> = m.cats.iter().map(|c| c.repeat).collect();
             m.tick(&mut ctx);
             let repeated = m.cats.iter().zip(&before).any(|(c, &r)| c.state == 1 && c.repeat > r);
-            if repeated && ctx.sounds.contains(&SND_PURR) {
+            if repeated && ctx.sounds.iter().any(|&s| engine::snd_id(s) == SND_PURR) {
                 repeat_purrs += 1;
             }
             ctx.sounds.clear();
@@ -3674,7 +3673,7 @@ mod tests {
                 m.tick(&mut ctx);
                 if ctx.now_ms <= 60_000 {
                     chops60 += ctx.sounds.iter().filter(|&&s| s == SND_CAT_CHOP).count();
-                    purrs60 += ctx.sounds.iter().filter(|&&s| s == SND_PURR).count();
+                    purrs60 += ctx.sounds.iter().filter(|&&s| engine::snd_id(s) == SND_PURR).count();
                 }
                 ctx.sounds.clear();
                 if m.clock == clock {

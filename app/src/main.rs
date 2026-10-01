@@ -391,10 +391,18 @@ impl App {
 
     fn play_sounds(&mut self, pack_root: &std::path::Path, ids: &[u32]) {
         let Some(h) = &self.audio_handle else { return };
-        for id in ids {
+        for &entry in ids {
+            let id = engine::snd_id(entry);
             let p = pack_root.join("sounds").join(format!("{id}.wav"));
             if let Ok(f) = std::fs::File::open(&p) {
                 if let Ok(dec) = rodio::Decoder::new(std::io::BufReader::new(f)) {
+                    // queued: append to the playing sink, gapless
+                    if engine::snd_queued(entry) {
+                        if let Some(sink) = self.channel.as_ref().filter(|s| !s.empty()) {
+                            sink.append(dec);
+                            continue;
+                        }
+                    }
                     // single channel: pre-empt whatever is playing
                     if let Some(old) = self.channel.take() {
                         old.stop();

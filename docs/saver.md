@@ -1006,3 +1006,13 @@ on a visible window; full-screen views go dormant on the stop /
 unlock broadcasts and when System Settings quits, and only the host's
 `startAnimation()` wakes them; dormant or off-screen views neither tick nor
 draw.
+
+## Queued sounds (2026-09-30)
+
+`Ctx::queue_sound(id)` marks a cue with `engine::SND_QUEUE`: it plays after
+whatever the sfx channel is playing, back to back, instead of pre-empting it
+(the 1995 SndChannel's command queue). The saver reads the flag with
+`rtw_sound_queued(rt)` right after each `rtw_next_sound`, and schedules the
+player with `play(atTime:)` at the chain's tail on the device clock, so there
+is no frame-quantised gap. A plain (pre-empting) cue flushes the chain.
+

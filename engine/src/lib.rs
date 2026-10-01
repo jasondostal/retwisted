@@ -767,6 +767,31 @@ pub struct Ctx {
     pub mouse_down: bool,
 }
 
+/// Flag bit on a `Ctx::sounds` entry: QUEUE behind whatever is playing on
+/// the sfx channel (gapless, the 1995 SndChannel's own command queue)
+/// instead of pre-empting it. Set it with [`Ctx::queue_sound`]; shells and
+/// tools read the id back with [`snd_id`].
+pub const SND_QUEUE: u32 = 0x8000_0000;
+
+/// The snd id of a `Ctx::sounds` entry, flag stripped.
+pub fn snd_id(entry: u32) -> u32 {
+    entry & !SND_QUEUE
+}
+
+/// Whether a `Ctx::sounds` entry queues instead of pre-empting.
+pub fn snd_queued(entry: u32) -> bool {
+    entry & SND_QUEUE != 0
+}
+
+impl Ctx {
+    /// Cue `id` to play after the channel's current (and already queued)
+    /// sounds, back to back. A plain `sounds.push` still pre-empts — and
+    /// drops anything queued, like a SndChannel flushed by quietCmd.
+    pub fn queue_sound(&mut self, id: u32) {
+        self.sounds.push(id | SND_QUEUE);
+    }
+}
+
 pub trait Module {
     fn name(&self) -> &'static str;
     fn controls(&self) -> Vec<ControlDef>;

@@ -117,6 +117,9 @@ pub struct Runtime {
     sound_queue: Vec<u32>,
     /// Backing store for the pointer handed out by `rtw_next_sound`.
     sound_path: Option<CString>,
+    /// Whether the sound `next_sound` last returned QUEUES behind the
+    /// playing one (`engine::SND_QUEUE`) instead of pre-empting it.
+    sound_queued: bool,
     /// Backing store for the pointer handed out by `rtw_loop_sound`.
     loop_path: Option<CString>,
     /// Backing store for the pointer handed out by the control-string calls
@@ -203,6 +206,7 @@ impl Runtime {
             epoch_us: None,
             sound_queue: Vec::new(),
             sound_path: None,
+            sound_queued: false,
             loop_path: None,
             str_scratch: None,
             music_state: None,
@@ -414,12 +418,15 @@ impl Runtime {
     /// the file. Ids with no packed sound are skipped, not reported.
     pub fn next_sound(&mut self) -> Option<PathBuf> {
         while !self.sound_queue.is_empty() {
-            let id = self.sound_queue.remove(0);
+            let entry = self.sound_queue.remove(0);
+            let id = engine::snd_id(entry);
             let p = self.pack_root.join("sounds").join(format!("{id}.wav"));
             if p.exists() {
+                self.sound_queued = engine::snd_queued(entry);
                 return Some(p);
             }
         }
+        self.sound_queued = false;
         None
     }
 }
@@ -1103,6 +1110,17 @@ pub unsafe extern "C" fn rtw_next_sound(rt: *mut Runtime) -> *const c_char {
             std::ptr::null()
         }
     })
+}
+
+/// Whether the sound the last `rtw_next_sound` returned should QUEUE behind
+/// what the channel is playing (gapless, back to back) rather than pre-empt
+/// it. False after a NULL drain.
+///
+/// # Safety
+/// `rt` must be a live pointer from [`rtw_create`], or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rtw_sound_queued(rt: *const Runtime) -> bool {
+    rt.as_ref().map_or(false, |r| r.sound_queued)
 }
 
 /// The currently active looping sound as an absolute .wav path, or NULL when

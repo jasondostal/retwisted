@@ -91,7 +91,8 @@ impl<W: Write> Tracer<W> {
 
     /// Sound ids fired this tick, held until the next sample line.
     fn collect(&mut self, ctx: &mut Ctx) {
-        self.pending_sounds.append(&mut ctx.sounds);
+        // Trace lines carry plain snd ids (the queue flag is a shell detail).
+        self.pending_sounds.extend(ctx.sounds.drain(..).map(engine::snd_id));
     }
 
     fn due(&self, now_ms: u64) -> bool {
