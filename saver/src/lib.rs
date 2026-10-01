@@ -105,6 +105,10 @@ pub struct Runtime {
     pixels: Vec<u32>,
     /// Composed frame is up to date with the last tick.
     fresh: bool,
+    /// Hash of the last frame `frame_changed` reported, so the host can
+    /// skip redrawing identical frames (most modules change far less often
+    /// than the 60 Hz frame loop runs).
+    shown_hash: Option<u64>,
     rng: RandomLong,
     rng15: Random15,
     /// Ticks run; the module clock is `clock.now_ms(ticks)`.
@@ -197,6 +201,7 @@ impl Runtime {
             cache,
             pixels: vec![0; SIM_PIXELS],
             fresh: false,
+            shown_hash: None,
             // Fixed seeds would make every screensaver launch play out the
             // identical run; seed off the clock instead.
             rng: RandomLong::new(seed()),
@@ -336,6 +341,22 @@ impl Runtime {
             self.fresh = true;
         }
         &self.pixels
+    }
+
+    /// Compose (if stale) and report whether the frame differs from the
+    /// last one this returned true for. FNV-1a over 64-bit pairs: ~0.1 ms
+    /// for 640×480, against a CoreGraphics scale-and-blit per redraw.
+    pub fn frame_changed(&mut self) -> bool {
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for pair in self.pixels().chunks(2) {
+            let w = pair[0] as u64 | (pair.get(1).copied().unwrap_or(0) as u64) << 32;
+            h = (h ^ w).wrapping_mul(0x0100_0000_01b3);
+        }
+        if self.shown_hash == Some(h) {
+            return false;
+        }
+        self.shown_hash = Some(h);
+        true
     }
 
     /// Decoded bytes held in the sprite cache (shared: every runtime of this
@@ -1058,6 +1079,17 @@ pub unsafe extern "C" fn rtw_tick(
             caps_lock,
         )
     })
+}
+
+/// Whether the composed frame differs from the last one this returned true
+/// for (true on the first call). The host redraws only then.
+///
+/// # Safety
+/// `rt` must be a live pointer from [`rtw_create`], or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rtw_frame_changed(rt: *mut Runtime) -> bool {
+    let Some(rt) = rt.as_mut() else { return false };
+    guarded(true, || rt.frame_changed())
 }
 
 /// Pointer to the composed frame: `rtw_width() * rtw_height()` `uint32_t`

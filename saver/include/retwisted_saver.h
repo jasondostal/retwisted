@@ -145,6 +145,10 @@ const char *rtw_next_sound(RtwRuntime *rt);
 // playing (back to back, gapless) instead of pre-empting it.
 bool rtw_sound_queued(const RtwRuntime *rt);
 
+// Whether the composed frame differs from the last one this returned true
+// for (true on the first call). Redraw only then.
+bool rtw_frame_changed(RtwRuntime *rt);
+
 // The currently active looping sound as an absolute .wav path, or NULL when
 // no loop is sounding. Valid until the next rtw_loop_sound call.
 const char *rtw_loop_sound(RtwRuntime *rt);

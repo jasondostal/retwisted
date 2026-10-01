@@ -1120,7 +1120,7 @@ public final class RetwistedSaverView: ScreenSaverView {
         let now = UInt64(max(0, (CACurrentMediaTime() - epoch) * 1000))
         let c = Calendar.current.dateComponents([.hour, .minute, .second], from: Date())
         let (mx, my) = mouseInSim()
-        _ = rtw_tick(
+        let ran = rtw_tick(
             rt, now,
             UInt8(c.hour ?? 0), UInt8(c.minute ?? 0), UInt8(c.second ?? 0),
             mx, my,
@@ -1131,7 +1131,13 @@ public final class RetwistedSaverView: ScreenSaverView {
         if randomizing, let after = rotateAfter, CACurrentMediaTime() - epoch >= after {
             rotate()
         }
-        setNeedsDisplay(bounds)
+        // Redraw only a frame that changed: the loop runs at the module's
+        // tick rate (up to 60 Hz) but most modules' pictures change at a
+        // fraction of it, and each redraw is a 1.2 MB copy plus a full-screen
+        // CoreGraphics scale (~20 % CPU in the Settings pane, 2026-09-30).
+        if let rt = self.rt, ran > 0, rtw_frame_changed(rt) {
+            setNeedsDisplay(bounds)
+        }
     }
 
     override public func draw(_ rect: NSRect) {
