@@ -14,6 +14,11 @@ This file is everything else, plus the short "what's owed right now" view.
 - [ ] message-mayhem — the man from the decompile (b6508e4). Watch: jet writes the text, no treadmill, line wrap on a long message (Message control), death walk.
 - [ ] chameleon — SetRun-id fix landed (bcba4bb, 2026-09-19). Mating pairs, walk continuity, no missing art.
 
+## Jason's playtest 2026-09-30
+- [x] coming-soon "guy stuck lower right, never moves": AUTHENTIC — golden host stands in his spotlight at a lower corner, gestures in place, swaps corners between trailers (port: R 0–14 s, L 16–56 s, R 58–74 s). Ask Jason if he ever saw the corner swap.
+- [x] voyeur "every window lit, building builds out like tetris, jerky windows": the 0x30c closed-cell bug (31deda3).
+- [ ] voyeur "WAY too much activity / sound": port ambient = C exactly (RandomBelow(5000) per DoDrawFrame, 50/50 snd 5/6) at the rig's 185 DoDrawFrames/tick → 131 cues/min; golden ≥ 64/min by template (undercounts overlaps), sounding ~46 % of the time. JASON'S CALL after re-looking with 31deda3: keep the QEMU rate or pick a slower "real Quadra" DRAW_FRAMES_PER_TICK.
+
 ## Jason's eye 2026-09-26 (windowed player) — defects
 - [x] mikes-so-called-life: EYE PASS 2026-09-29 ("WAY better"). FIXED 2dc0e25 — invented surprise pose (teleports), invented cue list + table read 2 rows late (1009/1012 spam), self-ringing phone; awaiting eye. Was: BAD. Sat down to watch TV → blinked to the back standing → blinked into the chair; weird sound with it. Kitchen: mid-walk blink toward the fridge. (Teleports — the 2a6eed8 port, never eyeballed before.)
 - [ ] message-mayhem: FIXED f2de2f1 — hand-offs now link on the shared part + part-flag flip (fn028A→fn3F2E); feet slide 33→0 px, matches capture; awaiting eye. Was: jerk at the end of writing a letter / when the animation resets.
