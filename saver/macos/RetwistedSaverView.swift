@@ -329,6 +329,15 @@ public final class RetwistedSaverView: ScreenSaverView {
     /// inside any sane slack — so of the views that pass the time gate,
     /// only the newest may sound.
     private static weak var newestStarted: RetwistedSaverView?
+    /// Only the session's view runs live. Every other view — the pane
+    /// preview, the sheet thumbnail, anything the host keeps around — shows
+    /// ONE still of the selected module (fast-forwarded `stillAtMs`, sounds
+    /// discarded) and then does nothing: no ticking, no audio, nothing to go
+    /// stale (Jason's call, 2026-09-30, after a day of live previews mixing
+    /// modules and audio). Headless tools (no window) stay live.
+    private var stillReady = false
+    private static let stillAtMs: UInt64 = 4000
+    private var isLive: Bool { window == nil || isRealRun }
     private var startedAt: CFTimeInterval = 0
     private var observers: [NSObjectProtocol] = []
     /// Same, for the in-process centre (settingsChanged).
@@ -433,7 +442,20 @@ public final class RetwistedSaverView: ScreenSaverView {
         for name in sleepers {
             observers.append(dnc.addObserver(forName: Notification.Name(name), object: nil, queue: .main) {
                 [weak self] _ in
-                self?.goDormant(name, endsSession: true)
+                guard let self else { return }
+                // A view that was already running when the session started
+                // (the pane / sheet thumbnail) is not part of the session:
+                // put it to sleep and nothing ever wakes it — the host does
+                // not restart it, so the preview froze after every real run
+                // (Jason, 2026-09-30). It stays up; it was silent anyway.
+                if Self.sessionStartedAt > 0 && self.startedAt > 0
+                    && self.startedAt < Self.sessionStartedAt - 5 {
+                    Self.sessionActive = false
+                    self.silence()
+                    Self.log.notice("retwisted: \(name, privacy: .public) -> pre-session view stays up")
+                    return
+                }
+                self.goDormant(name, endsSession: true)
             })
         }
         for name in ["com.apple.screensaver.willstart", "com.apple.screensaver.didstart"] {
@@ -479,6 +501,7 @@ public final class RetwistedSaverView: ScreenSaverView {
     private func open(_ slug: String) {
         self.slug = slug
         epoch = CACurrentMediaTime()
+        stillReady = false
         musicTried = false
         framesRun = 0
         rotateAfter = nil
@@ -938,6 +961,11 @@ public final class RetwistedSaverView: ScreenSaverView {
         dormant = false
         startedAt = CACurrentMediaTime()
         Self.newestStarted = self
+        // Whatever this view ran before, it shows the CURRENT selection now.
+        reloadSelection()
+        // A still's runtime has been fast-forwarded on a fake clock; a view
+        // started for a session runs a fresh one in real time.
+        if stillReady { close(); stillReady = false }
         // Build (or rebuild, after a dormant release) BEFORE the timer
         // starts: super reads `animationTimeInterval`, which comes from the
         // module. A new session (or a restarted preview) on a view that has
@@ -1116,6 +1144,18 @@ public final class RetwistedSaverView: ScreenSaverView {
             setNeedsDisplay(bounds)
             return
         }
+        if !isLive {
+            silence()
+            if !stillReady { makeStill(rt) }
+            return
+        }
+        if stillReady {
+            // Went live under a still (didstart after startAnimation):
+            // start the module over in real time.
+            close()
+            ensureRuntime()
+            return
+        }
         diag(true)
         let now = UInt64(max(0, (CACurrentMediaTime() - epoch) * 1000))
         let c = Calendar.current.dateComponents([.hour, .minute, .second], from: Date())
@@ -1138,6 +1178,22 @@ public final class RetwistedSaverView: ScreenSaverView {
         if let rt = self.rt, ran > 0, rtw_frame_changed(rt) {
             setNeedsDisplay(bounds)
         }
+    }
+
+    /// Fast-forward a fresh runtime to `stillAtMs` and draw that one frame.
+    private func makeStill(_ rt: OpaquePointer) {
+        let c = Calendar.current.dateComponents([.hour, .minute, .second], from: Date())
+        var t: UInt64 = 0
+        while t <= Self.stillAtMs {
+            _ = rtw_tick(rt, t, UInt8(c.hour ?? 0), UInt8(c.minute ?? 0), UInt8(c.second ?? 0),
+                         -1, -1, false, false)
+            while rtw_next_sound(rt) != nil {}
+            t += 16
+        }
+        _ = rtw_frame_changed(rt)
+        stillReady = true
+        Self.log.notice("retwisted: \(self.slug, privacy: .public) still (not the session view) level=\(self.window?.level.rawValue ?? -1)")
+        setNeedsDisplay(bounds)
     }
 
     override public func draw(_ rect: NSRect) {

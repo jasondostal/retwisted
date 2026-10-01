@@ -1018,3 +1018,15 @@ whatever the sfx channel is playing, back to back, instead of pre-empting it
 player with `play(atTime:)` at the chain's tail on the device clock, so there
 is no frame-quantised gap. A plain (pre-empting) cue flushes the chain.
 
+## Still previews (2026-09-30)
+
+Only the session's view runs live (`isRealRun`: session active, shielding
+level, started for this session, newest started). Every other view — pane
+preview, sheet thumbnail, anything the host keeps alive — builds the current
+selection, fast-forwards it 4 s on a fake clock (sounds discarded), draws that
+one frame and stops: no ticking, no audio. Views re-read the selection on
+every `startAnimation()`, and a view that was already up when a session began
+is not put to sleep when it ends (the host never restarts it — that was the
+black preview). Pane CPU 20 % → 0.8 %. Live previews had mixed modules and
+audio across stale views; Jason chose stills.
+
