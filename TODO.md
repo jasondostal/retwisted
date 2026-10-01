@@ -76,7 +76,8 @@ This file is everything else, plus the short "what's owed right now" view.
 
 ## Engine
 - [x] DISPLAY GAMMA LANDED 2026-09-29 (engine::DISPLAY_GAMMA_STRENGTH = 1.0; app::present_gamma after compose in player/frame/saver; `frame --raw` skips; toxic 444444→666666, sand cc9966→dab387 vs golden d9b287–dbb285). (Jason's call 2026-09-29: option 1, "match the capture" with a tunable constant). The Mac video driver's gamma table (Std Gamma for a 2.5 CRT, ≈ power 0.69) sits between clut and DAC; QEMU goldens are post-gamma, the port renders raw clut. Measured points (lossless Finder screendumps): 00→00 11→27 22→3f 33→54 44→66 55→77 66→87 77→96 88→a5 99→b3 aa→c0 bb→cd cc→da dd→e7 ee→f3 ff→ff (per channel). Plan: `engine::DEVICE_GAMMA: [u8;256]` by linear interpolation through those 16 points + a strength constant; `present_gamma(&mut [u32])` in app/src/lib.rs applied AFTER compose at main.rs:~464, bin/frame.rs:~246, saver/src/lib.rs:~322 (after LoadCLUT remaps — never before); `frame --raw` to skip; keep compose's exact-value tests; note in totally-twisted docs/emulator/setup.md (QEMU goldens post-gamma, Basilisk not). WAIT for the chameleon camo-fade lane (same files).
-- [ ] voyeur — sky: golden is a purple gradient, port dark blue; not explained by gamma (palette / time-of-day state?).
+- [x] voyeur — sky (2026-09-30): AUTHENTIC. Three 2000-series strips rolled once per run; both voyeur-long goldens show variant 1 (= the port's 119/135 top), short golden variant 0. Not a bug.
+- [x] voyeur — CLOSED CELL 0x30c is RLE art 780 (p_RLE_Draw, series 1007, 99×86), not compound frame 780 (three LIT windows, 298 px). Every closing window painted a lit 3-window strip → "every window lit", wall building out over the skyline "like live tetris" (Jason 2026-09-30). Fixed.
 - [ ] sfx loop/stop primitive is in; audit every module that should use it (boris buzz does).
 - [ ] Clut interpolation (needed by chameleon camo fade).
 

@@ -265,7 +265,13 @@ const DRAW_FRAMES_PER_TICK: u32 = 185;
 const OFF_TABLE: [i32; 2] = [20, 2500];
 const WINDOW_COUNT: usize = 5; // g0E4C
 /// Bank-1000 frames the module paints into the backdrop.
-const CLOSED_CELL: i32 = 0x30c; // the closed shutter cell
+/// The closed shutter cell. `fn38`/`fn36` draw it with `p_RLE_Draw` (via
+/// `fn59` @4C94) — RLE ART 780, packed as series 1007 frame 780 (99×86) —
+/// not through the compound bank's draw like `0xc`. Read as compound frame
+/// 780 (three LIT windows, 298 px wide) it hung two cells of lit wall over
+/// the skyline whenever the building stood on the left (golden `voyeur`:
+/// clean). Fixed 2026-09-30.
+const CLOSED_CELL: i32 = 0x30c;
 const LIT_EMPTY: i32 = 0xc; // state 0x16's empty lit window (fn38 GAP)
 /// Off-screen parks: `SetPos(1000, x)` in 0x1c/0xb/0xe/0x16, `SetPos(10000, x)`
 /// in 0x13/0x14/0x15.
@@ -2230,7 +2236,8 @@ impl Module for Voyeur {
         }
         // the backdrop paints, in paint order
         for p in &self.paints {
-            if let Some(f) = self.pack.frame(BASE, p.frame as u32) {
+            let series = if p.frame == CLOSED_CELL { BASE_WALL } else { BASE };
+            if let Some(f) = self.pack.frame(series, p.frame as u32) {
                 out.push(SpriteDraw { flip: p.flip, pal: 0, png: f.png.clone(), x: p.x, y: p.y });
             }
         }
