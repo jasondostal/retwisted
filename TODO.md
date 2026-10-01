@@ -15,6 +15,7 @@ This file is everything else, plus the short "what's owed right now" view.
 - [ ] chameleon — SetRun-id fix landed (bcba4bb, 2026-09-19). Mating pairs, walk continuity, no missing art.
 
 ## Jason's playtest 2026-09-30
+- [ ] coming-soon CORNER SWAP RATE (Jason: never swapped in his player run). Port = C as decoded: mascot is only re-placed on a re-stage, rolled once per trailer at Hold's deadline, RandomBelow(5 − pace/20) → 1/4 at default Mellow, then RandomBelow(2) side coin → a swap every ~8 trailers (~2 min). Player seed 0x5EEDCAFF: right side for the first 249 s. BUT the 60 s Mellow golden re-staged on 3 of 4 trailer changes (P ≈ 5 % under 1/4). Settle with a ≥ 5 min Mellow capture; Pace = Fast re-stages every trailer. `RTW_SEED=… frame` replays a player launch.
 - [x] coming-soon "guy stuck lower right, never moves": AUTHENTIC — golden host stands in his spotlight at a lower corner, gestures in place, swaps corners between trailers (port: R 0–14 s, L 16–56 s, R 58–74 s). Ask Jason if he ever saw the corner swap.
 - [x] voyeur "every window lit, building builds out like tetris, jerky windows": the 0x30c closed-cell bug (31deda3).
 - [ ] voyeur "WAY too much activity / sound": port ambient = C exactly (RandomBelow(5000) per DoDrawFrame, 50/50 snd 5/6) at the rig's 185 DoDrawFrames/tick → 131 cues/min; golden ≥ 64/min by template (undercounts overlaps), sounding ~46 % of the time. JASON'S CALL after re-looking with 31deda3: keep the QEMU rate or pick a slower "real Quadra" DRAW_FRAMES_PER_TICK.

@@ -211,9 +211,17 @@ fn main() {
         m.set_control(*n, *v);
     }
 
+    // RTW_SEED / RTW_SEED15 override the fixed streams (replaying a player
+    // launch: the player uses 0x5EED_CAFE + n and a clock-seeded Random15).
+    let env_seed = |k: &str, d: u64| {
+        std::env::var(k).ok().and_then(|v| {
+            let v = v.trim_start_matches("0x");
+            u64::from_str_radix(v, 16).ok()
+        }).unwrap_or(d)
+    };
     let mut ctx = Ctx {
-        rng: RandomLong::new(0x5EED_CAFE),
-        rng15: Random15::new(0xC0FFEE),
+        rng: RandomLong::new(env_seed("RTW_SEED", 0x5EED_CAFE)),
+        rng15: Random15::new(env_seed("RTW_SEED15", 0xC0FFEE) as u32),
         sounds: Vec::new(),
         caps_lock: false,
         now_ms: 0,
